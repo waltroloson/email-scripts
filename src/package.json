@@ -1,0 +1,16 @@
+{
+  "name": "stock",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node stock.js"
+  },
+      "env": "production",
+  "dependencies": {
+    "async": "*",
+    "twitter": "*",
+    "bunyan": "*",
+    "bunyan-debug-stream": "*",
+    "node-schedule": "*"
+  }
+}
