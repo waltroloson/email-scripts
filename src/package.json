@@ -11,6 +11,8 @@
     "twitter": "*",
     "bunyan": "*",
     "bunyan-debug-stream": "*",
+    "nodemailer": "*",
+    "moment": "*",
     "node-schedule": "*"
   }
 }
