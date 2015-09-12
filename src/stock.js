@@ -132,7 +132,6 @@ function getTickerTweets(ticker, callback) {
   return client.get('/search/tweets', function (err, tweets, response) {
     if (err) {
       log.error(err);
-      throw err;
     }
     callback(null, tweets);
   }); 
@@ -157,7 +156,6 @@ function sendMail(resultMail, callback) {
   }, function(err, response) {
     if(err) {
       log.error(err);
-      throw err;
     }
     log.info("Mail sent: " + response.message);
   });
