@@ -139,13 +139,15 @@ function getTickerTweets(ticker, callback) {
 
 function sendMail(resultMail, callback) {
   log.trace("Sending mail with this HTML body: "+resultMail);
-  var smtpTransport = new nodemailer.createTransport({
-    service: mailProvider,
-    auth: {
-      user: mailUser,
-      pass: mailPassword 
-    }
-  });
+//  var smtpTransport = new nodemailer.createTransport({
+    //service: mailProvider,
+//    
+//    auth: {
+//      user: mailUser,
+//      pass: mailPassword 
+//    }
+//  });
+var smtpTransport = new nodemailer.createTransport();
 
   smtpTransport.sendMail({
     from: "Stock Mail <" + mailUser + ">",
