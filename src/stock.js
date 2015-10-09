@@ -72,10 +72,10 @@ if (process.env.TWITTER_ACCESS_TOKEN_SECRET == null) {
    process.exit(1);
 }
 
-//if (process.env.TWITTER_ACCOUNTS == null) {
-//   log.error("ERROR: no tickers specified in environment variable TWITTER_ACCOUNTS - Exiting...");
-//   process.exit(1);
-//}
+if (process.env.TWITTER_ACCOUNTS == null) {
+   log.error("ERROR: no tickers specified in environment variable TWITTER_ACCOUNTS - Exiting...");
+   process.exit(1);
+}
 
 if (process.env.MONGODB_ADMIN_USER == null) {
    log.error("ERROR: no MongoDB admin user specified in environment variable MONGODB_ADMIN_USER - Exiting...");
@@ -115,7 +115,7 @@ var twitterAccessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
 var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
 
 
-//var me = schedule.scheduleJob(cronExpression, function(){
+var me = schedule.scheduleJob(cronExpression, function(){
   log.info("Executing stock script");
   log.info("Tickers = "+tickers);
   log.info("Twitter Accounts = "+twitterAccounts);
@@ -269,7 +269,7 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
       callback(null);
     });
   });
-//}); 
+}); 
 
 function getTickerPrice(ticker,callback) {
   return http.get({
