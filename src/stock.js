@@ -114,6 +114,7 @@ var twitterAccessTokenKey = process.env.TWITTER_ACCESS_TOKEN_KEY;
 var twitterAccessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
 var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
 
+var couldGetNewFollowers = true;
 
 var me = schedule.scheduleJob(cronExpression, function(){
   log.info("Executing stock script");
@@ -124,7 +125,6 @@ var me = schedule.scheduleJob(cronExpression, function(){
                 replset: { socketOptions: { keepAlive: 1, connectTimeoutMS : 300 } } };
   var Follower = mongoose.model('Follower', {following_account: String, name: String, screen_name: String, profile_image_url_https: String});
   var resultMail = "";
-  var couldGetNewFollowers = true;
   async.parallel({
     tickers: function (callback) {
       var tickersJson = {};
