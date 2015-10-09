@@ -120,7 +120,11 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
   log.info("Tickers = "+tickers);
   log.info("Twitter Accounts = "+twitterAccounts);
   var mongoUrl = 'mongodb://' +process.env.MONGODB_ADMIN_USER+ ':' +process.env.MONGODB_ENV_MONGODB_PASS+ '@' +process.env.MONGODB_PORT_27017_TCP_ADDR+ ':' +process.env.MONGODB_PORT_27017_TCP_PORT+ '/' +process.env.MONGODB_DATABASE;
+  var mongoOptions = { server: { socketOptions: { keepAlive: 1, connectTimeoutMS: 300 } }, 
+                replset: { socketOptions: { keepAlive: 1, connectTimeoutMS : 300 } } };
+  var Follower = mongoose.model('Follower', {following_account: String, name: String, screen_name: String, profile_image_url_https: String});
   var resultMail = "";
+  var couldGetNewFollowers = true;
   async.parallel({
     tickers: function (callback) {
       var tickersJson = {};
@@ -149,6 +153,16 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
       async.waterfall([
         function(callback) {
           var twitterAccountsJson = {};
+          var conn = mongoose.connection;
+          mongoose.connect(mongoUrl, mongoOptions);
+          conn.on('error', function (err) {
+            if (err) {
+              couldGetNewFollowers = false;
+              log.error("ERROR connecting to MongoDB...");
+              log.error(err);
+              return callback(err, twitterAccountsJson);
+            }
+          });
           async.each(twitterAccounts, function(account, callback) {
             // Get total followers
             getTwitterAccountFollowersCount(account, function (err, totalFollowers) {
@@ -156,7 +170,7 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
               if (err) {
                 log.error("Error getting followers count for account "+account+" giving it up...: ");
                 log.error(err);
-                twitterAccountsJson[account].totalFollowers = "Could not retreive data";
+                twitterAccountsJson[account].totalFollowers = "Could not retrieve data";
                 return callback(null);
               }
               log.trace("Twitter account "+account+" has a total of "+totalFollowers+" followers");
@@ -181,32 +195,35 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
               if (err) {
                 log.error("Error getting NEW followers for account "+account+" giving it up...: ");
                 log.error(err);
-                twitterAccountsJson[account].newFollowers = ["Could not retreive data"];
+                twitterAccountsJson[account].newFollowers = "Could not retrieve data";
                 return callback(null);
               }
               log.trace("Succesfully got NEW twitter followers for user "+account);
-              mongoose.connect(mongoUrl);
-              var Follower = mongoose.model('Follower', {name: String, screen_name: String});
+           
               async.each(currentFollowers, function(follower, callback) {
                 async.each(follower.users, function(user, callback) {
-                  log.debug("Looking for user " +user.screen_name+ " on MongoDB...");
-                  Follower.findOne({screen_name: user.screen_name}, function (err, theFollower) {
+                  log.debug("Looking for user " +account+ ":" +user.screen_name+ " on MongoDB...");
+                  Follower.findOne({following_account: account, screen_name: user.screen_name}, function (err, theFollower) {
                     if (err) {
-                        log.error("ERROR looking for user " +user.screen_name+ " on MongoDB...");
+                        log.error("ERROR looking for user " +account+ ":" +user.screen_name+ " on MongoDB...");
                         log.error(err);
+                        return callback(err);
                     } else if (! theFollower) {
-                      log.trace("User " +user.screen_name+ " not found on MongoDB, adding it...");
-                      twitterAccountsJson[account].newFollowers.push(user.name+" (@"+user.screen_name+")");
-                      var newFollower = new Follower({name: user.name, screen_name: user.screen_name});
+                      log.trace("User " +account+ ":" +user.screen_name+ " not found on MongoDB, adding it...");
+                      twitterAccountsJson[account].newFollowers.push(user);
+                      var newFollower = new Follower({following_account: account, name: user.name, screen_name: user.screen_name, profile_image_url_https: user.profile_image_url_https});
                       newFollower.save(function (err, userObj) {
                         if (err) {
-                          console.log(err);
+                          log.error(err);
+                          return callback(err);
                         } else {
-                          console.log('saved successfully:', userObj);
+                          log.debug('saved successfully:', userObj);
+                          callback(null);
                         }
                       });
                     } else if (theFollower) {
-                      log.trace("User " +user.screen_name+ " found in MongoDB, continuing...");
+                      log.trace("User " +account+ ":" +user.screen_name+ " found in MongoDB, continuing...");
+                      callback(null);
                     }
                   });
                 //  callback(null);
@@ -214,26 +231,24 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
                 function (err) {
                   if (err) {
                     log.error(err);
-                    return;
+                    return callback(err);
                   }
                   callback(null);
                 });
               },
-              function (err) {
+              function (err) {           
                 if (err) {
                   log.error(err);
-                  return;
+                  return callback(err);
                 }
                 callback(null);
               });
-              callback(null);
-            });
-            mongoose.disconnect();
+            });  
           },
           function(err) {
             if (err) {
               log.error(err);
-              return;    
+              return callback(err, twitterAccountsJson);    
             }
             log.trace("Finished processing new twitter accounts. twitterAccountsJson = "+JSON.stringify(twitterAccountsJson));
             callback(null, twitterAccountsJson);
@@ -241,6 +256,7 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
         }],
         
         function (err, twitterAccountsJson) {
+          mongoose.disconnect();
           log.trace("Finishing processing all twitter accounts (total & new followers). twitterAccountsJson = "+JSON.stringify(twitterAccountsJson));
           callback(null, twitterAccountsJson);
         });
@@ -308,7 +324,6 @@ function getTwitterAccountNewFollowers(account, callback) {
   });
   var totalFollowers = [];
   client.get('/followers/list', {screen_name: account, count: '200'}, function getData(err, followers, response) {
-    //console.log(followers);
     totalFollowers = totalFollowers.concat(followers);
     log.trace("Cursor = "+followers.next_cursor);
     if(followers.next_cursor > 0) {
@@ -342,9 +357,13 @@ function sendMail(resultJson, callback) {
       resultMail = resultMail+"<h3>@"+account+"</h3>";
       resultMail = resultMail+"<ul>";
         resultMail = resultMail+"<li><strong>Total Followers: "+resultJson.twitterAccounts[account].totalFollowers+"</strong></li>";
-        resultMail = resultMail+"<li><strong>New Followers: "+resultJson.twitterAccounts[account].newFollowers.length+"</strong></li><p>";
-        for (follower in resultJson.twitterAccounts[account].newFollowers) {
-          resultMail = resultMail+resultJson.twitterAccounts[account].newFollowers[follower]+"<br>";
+        if (! couldGetNewFollowers || resultJson.twitterAccounts[account].newFollowers == "Could not retrieve data") {
+          resultMail = resultMail+"<li><strong>New Followers: Could not retrieve data</strong></li><p>";
+        } else {
+          resultMail = resultMail+"<li><strong>New Followers: "+resultJson.twitterAccounts[account].newFollowers.length+"</strong></li><p>";
+          for (follower in resultJson.twitterAccounts[account].newFollowers) {
+            resultMail = resultMail+'<div>&emsp;<img style="vertical-align:middle" src="'+resultJson.twitterAccounts[account].newFollowers[follower].profile_image_url_https+'"><span style=""> <a href="https://twitter.com/'+resultJson.twitterAccounts[account].newFollowers[follower].screen_name+'">@'+resultJson.twitterAccounts[account].newFollowers[follower].screen_name+'</a> - '+resultJson.twitterAccounts[account].newFollowers[follower].name+'</span></div><br>';
+          }
         }
       resultMail = resultMail+"</p></ul>";
     resultMail = resultMail+"</p>";
@@ -371,7 +390,7 @@ var smtpTransport = new nodemailer.createTransport();
   }, function(err, response) {
     if(err) {
       log.error(err);
-      return;
+      return callback(err);
     }
     log.info("Mail sent: " + response.message);
   });
