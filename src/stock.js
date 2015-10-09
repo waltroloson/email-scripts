@@ -354,7 +354,7 @@ function sendMail(resultJson, callback) {
   for (account in resultJson.twitterAccounts) {
     // Account Total followers HTML
     resultMail = resultMail+"<p>";
-      resultMail = resultMail+"<h3>@"+account+"</h3>";
+      resultMail = resultMail+'<h3><a href="https://twitter.com/'+account+'">@'+account+'</a></h3>';
       resultMail = resultMail+"<ul>";
         resultMail = resultMail+"<li><strong>Total Followers: "+resultJson.twitterAccounts[account].totalFollowers+"</strong></li>";
         if (! couldGetNewFollowers || resultJson.twitterAccounts[account].newFollowers == "Could not retrieve data") {
