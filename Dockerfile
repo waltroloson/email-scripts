@@ -18,6 +18,8 @@ ENV MAIL_PASSWORD **ChangeMe**
 ENV MAIL_RECIPIENTS **ChangeMe**
 ENV CRON_EXPRESSION 0 0 * * 1-5
 
+ENV MONGODB_ADMIN_USER admin
+
 ADD ./src /src
 WORKDIR /src
 RUN npm install

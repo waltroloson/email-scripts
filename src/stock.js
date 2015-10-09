@@ -8,6 +8,7 @@ var nodemailer = require("nodemailer");
 var moment = require("moment");
 var schedule = require('node-schedule');
 var bunyan = require('bunyan');
+var mongoose = require('mongoose');
 var bunyanDebugStream = require('bunyan-debug-stream');
 var log = bunyan.createLogger({
 	name: 'stock - '+__filename+' ',
@@ -76,6 +77,31 @@ if (process.env.TWITTER_ACCESS_TOKEN_SECRET == null) {
 //   process.exit(1);
 //}
 
+if (process.env.MONGODB_ADMIN_USER == null) {
+   log.error("ERROR: no MongoDB admin user specified in environment variable MONGODB_ADMIN_USER - Exiting...");
+   process.exit(1);
+}
+
+if (process.env.MONGODB_DATABASE == null) {
+   log.error("ERROR: no MongoDB database name specified in environment variable MONGODB_DATABASE - Exiting...");
+   process.exit(1);
+}
+
+if (process.env.MONGODB_ENV_MONGODB_PASS == null) {
+   log.error("ERROR: Could not find a MongoDB container linked - Have you run this container with --link mongodb:mongodb option? - Exiting...");
+   process.exit(1);
+}
+
+if (process.env.MONGODB_PORT_27017_TCP_PORT == null) {
+   log.error("ERROR: Could not find a MongoDB container linked - Have you run this container with --link mongodb:mongodb option? - Exiting...");
+   process.exit(1);
+}
+
+if (process.env.MONGODB_PORT_27017_TCP_ADDR == null) {
+   log.error("ERROR: Could not find a MongoDB container linked - Have you run this container with --link mongodb:mongodb option? - Exiting...");
+   process.exit(1);
+}
+
 var tickers = process.env.TICKERS.split(',');
 var cronExpression = process.env.CRON_EXPRESSION;
 var mailProvider = process.env.MAIL_PROVIDER;
@@ -93,6 +119,7 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
   log.info("Executing stock script");
   log.info("Tickers = "+tickers);
   log.info("Twitter Accounts = "+twitterAccounts);
+  var mongoUrl = 'mongodb://' +process.env.MONGODB_ADMIN_USER+ ':' +process.env.MONGODB_ENV_MONGODB_PASS+ '@' +process.env.MONGODB_PORT_27017_TCP_ADDR+ ':' +process.env.MONGODB_PORT_27017_TCP_PORT+ '/' +process.env.MONGODB_DATABASE;
   var resultMail = "";
   async.parallel({
     tickers: function (callback) {
@@ -149,23 +176,61 @@ var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
         function(twitterAccountsJson, callback) {
           async.each(twitterAccounts, function(account, callback) {
             // Get new followers
-            twitterAccountsJson[account].newFollowers = [];
+            twitterAccountsJson[account].newFollowers = []; // This is the html body
             getTwitterAccountNewFollowers(account, function (err, currentFollowers) {
               if (err) {
-                log.error("Error getting new followers for account "+account+" giving it up...: ");
+                log.error("Error getting NEW followers for account "+account+" giving it up...: ");
                 log.error(err);
                 twitterAccountsJson[account].newFollowers = ["Could not retreive data"];
                 return callback(null);
               }
-              log.trace("Got these twitter accounts for user "+account+": "+currentFollowers);
-              for (var i = 0, len = currentFollowers.length; i < len; i++) {
-                for (var j = 0, len2 = currentFollowers[i].users.length; j < len2; j++) {
-                  twitterAccountsJson[account].newFollowers.push(resultMail+currentFollowers[i].users[j].name+" (@"+currentFollowers[i].users[j].screen_name+")");
+              log.trace("Succesfully got NEW twitter followers for user "+account);
+              mongoose.connect(mongoUrl);
+              var Follower = mongoose.model('Follower', {name: String, screen_name: String});
+              async.each(currentFollowers, function(follower, callback) {
+                async.each(follower.users, function(user, callback) {
+                  log.debug("Looking for user " +user.screen_name+ " on MongoDB...");
+                  Follower.findOne({screen_name: user.screen_name}, function (err, theFollower) {
+                    if (err) {
+                        log.error("ERROR looking for user " +user.screen_name+ " on MongoDB...");
+                        log.error(err);
+                    } else if (! theFollower) {
+                      log.trace("User " +user.screen_name+ " not found on MongoDB, adding it...");
+                      twitterAccountsJson[account].newFollowers.push(user.name+" (@"+user.screen_name+")");
+                      var newFollower = new Follower({name: user.name, screen_name: user.screen_name});
+                      newFollower.save(function (err, userObj) {
+                        if (err) {
+                          console.log(err);
+                        } else {
+                          console.log('saved successfully:', userObj);
+                        }
+                      });
+                    } else if (theFollower) {
+                      log.trace("User " +user.screen_name+ " found in MongoDB, continuing...");
+                    }
+                  });
+                //  callback(null);
+                },
+                function (err) {
+                  if (err) {
+                    log.error(err);
+                    return;
+                  }
+                  callback(null);
+                });
+              },
+              function (err) {
+                if (err) {
+                  log.error(err);
+                  return;
                 }
-              }
+                callback(null);
+              });
               callback(null);
             });
-          },  function(err) {
+            mongoose.disconnect();
+          },
+          function(err) {
             if (err) {
               log.error(err);
               return;    
@@ -297,7 +362,6 @@ function sendMail(resultJson, callback) {
 //    }
 //  });
 var smtpTransport = new nodemailer.createTransport();
-
   smtpTransport.sendMail({
     from: "Stock Mail <" + mailUser + ">",
     to: mailRecipients,
