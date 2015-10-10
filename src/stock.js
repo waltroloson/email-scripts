@@ -115,15 +115,16 @@ var twitterAccessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
 var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
 
 var couldGetNewFollowers = true;
+var mongoUrl = 'mongodb://' +process.env.MONGODB_ADMIN_USER+ ':' +process.env.MONGODB_ENV_MONGODB_PASS+ '@' +process.env.MONGODB_PORT_27017_TCP_ADDR+ ':' +process.env.MONGODB_PORT_27017_TCP_PORT+ '/' +process.env.MONGODB_DATABASE;
+var mongoOptions = { server: { socketOptions: { keepAlive: 1, connectTimeoutMS: 300 } }, 
+                replset: { socketOptions: { keepAlive: 1, connectTimeoutMS : 300 } } };
+var Follower = mongoose.model('Follower', {following_account: String, name: String, screen_name: String, profile_image_url_https: String});
 
 var me = schedule.scheduleJob(cronExpression, function(){
   log.info("Executing stock script");
   log.info("Tickers = "+tickers);
   log.info("Twitter Accounts = "+twitterAccounts);
-  var mongoUrl = 'mongodb://' +process.env.MONGODB_ADMIN_USER+ ':' +process.env.MONGODB_ENV_MONGODB_PASS+ '@' +process.env.MONGODB_PORT_27017_TCP_ADDR+ ':' +process.env.MONGODB_PORT_27017_TCP_PORT+ '/' +process.env.MONGODB_DATABASE;
-  var mongoOptions = { server: { socketOptions: { keepAlive: 1, connectTimeoutMS: 300 } }, 
-                replset: { socketOptions: { keepAlive: 1, connectTimeoutMS : 300 } } };
-  var Follower = mongoose.model('Follower', {following_account: String, name: String, screen_name: String, profile_image_url_https: String});
+
   var resultMail = "";
   async.parallel({
     tickers: function (callback) {
