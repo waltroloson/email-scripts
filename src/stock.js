@@ -114,7 +114,7 @@ var twitterAccessTokenKey = process.env.TWITTER_ACCESS_TOKEN_KEY;
 var twitterAccessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
 var twitterAccounts = process.env.TWITTER_ACCOUNTS.split(',');
 
-var couldGetNewFollowers = true;
+var couldGetMongoDBConnection = true;
 var mongoUrl = 'mongodb://' +process.env.MONGODB_ADMIN_USER+ ':' +process.env.MONGODB_ENV_MONGODB_PASS+ '@' +process.env.MONGODB_PORT_27017_TCP_ADDR+ ':' +process.env.MONGODB_PORT_27017_TCP_PORT+ '/' +process.env.MONGODB_DATABASE;
 var mongoOptions = { server: { socketOptions: { keepAlive: 1, connectTimeoutMS: 300 } }, 
                 replset: { socketOptions: { keepAlive: 1, connectTimeoutMS : 300 } } };
@@ -158,7 +158,7 @@ var me = schedule.scheduleJob(cronExpression, function(){
           mongoose.connect(mongoUrl, mongoOptions);
           conn.on('error', function (err) {
             if (err) {
-              couldGetNewFollowers = false;
+              couldGetMongoDBConnection = false;
               log.error("ERROR connecting to MongoDB...");
               log.error(err);
               return callback(err, twitterAccountsJson);
@@ -209,7 +209,7 @@ var me = schedule.scheduleJob(cronExpression, function(){
                         log.error("ERROR looking for user " +account+ ":" +user.screen_name+ " on MongoDB...");
                         log.error(err);
                         return callback(err);
-                    } else if (! theFollower) {
+                    } else if (! theFollower && couldGetMongoDBConnection) {
                       log.trace("User " +account+ ":" +user.screen_name+ " not found on MongoDB, adding it...");
                       twitterAccountsJson[account].newFollowers.push(user);
                       var newFollower = new Follower({following_account: account, name: user.name, screen_name: user.screen_name, profile_image_url_https: user.profile_image_url_https});
@@ -358,7 +358,7 @@ function sendMail(resultJson, callback) {
       resultMail = resultMail+'<h3><a href="https://twitter.com/'+account+'">@'+account+'</a></h3>';
       resultMail = resultMail+"<ul>";
         resultMail = resultMail+"<li><strong>Total Followers: "+resultJson.twitterAccounts[account].totalFollowers+"</strong></li>";
-        if (! couldGetNewFollowers || resultJson.twitterAccounts[account].newFollowers == "Could not retrieve data") {
+        if (! couldGetMongoDBConnection || resultJson.twitterAccounts[account].newFollowers == "Could not retrieve data") {
           resultMail = resultMail+"<li><strong>New Followers: Could not retrieve data</strong></li><p>";
         } else {
           resultMail = resultMail+"<li><strong>New Followers: "+resultJson.twitterAccounts[account].newFollowers.length+"</strong></li><p>";
